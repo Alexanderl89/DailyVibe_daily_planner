@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AnteckningarRouteImport } from './routes/anteckningar'
 import { Route as DataRouteImport } from './routes/data'
 import { Route as FokusRouteImport } from './routes/fokus'
+import { Route as InstallningarRouteImport } from './routes/installningar'
 import { Route as StatistikRouteImport } from './routes/statistik'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const FokusRoute = FokusRouteImport.update({
   path: '/fokus',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InstallningarRoute = InstallningarRouteImport.update({
+  id: '/installningar',
+  path: '/installningar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StatistikRoute = StatistikRouteImport.update({
   id: '/statistik',
   path: '/statistik',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/anteckningar': typeof AnteckningarRoute
   '/data': typeof DataRoute
   '/fokus': typeof FokusRoute
+  '/installningar': typeof InstallningarRoute
   '/statistik': typeof StatistikRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/anteckningar': typeof AnteckningarRoute
   '/data': typeof DataRoute
   '/fokus': typeof FokusRoute
+  '/installningar': typeof InstallningarRoute
   '/statistik': typeof StatistikRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,24 @@ export interface FileRoutesById {
   '/anteckningar': typeof AnteckningarRoute
   '/data': typeof DataRoute
   '/fokus': typeof FokusRoute
+  '/installningar': typeof InstallningarRoute
   '/statistik': typeof StatistikRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/anteckningar' | '/data' | '/fokus' | '/statistik'
+  fullPaths:
+    '/' | '/anteckningar' | '/data' | '/fokus' | '/installningar' | '/statistik'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/anteckningar' | '/data' | '/fokus' | '/statistik'
-  id: '__root__' | '/' | '/anteckningar' | '/data' | '/fokus' | '/statistik'
+  to:
+    '/' | '/anteckningar' | '/data' | '/fokus' | '/installningar' | '/statistik'
+  id:
+    | '__root__'
+    | '/'
+    | '/anteckningar'
+    | '/data'
+    | '/fokus'
+    | '/installningar'
+    | '/statistik'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +94,7 @@ export interface RootRouteChildren {
   AnteckningarRoute: typeof AnteckningarRoute
   DataRoute: typeof DataRoute
   FokusRoute: typeof FokusRoute
+  InstallningarRoute: typeof InstallningarRoute
   StatistikRoute: typeof StatistikRoute
 }
 
@@ -109,6 +128,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FokusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/installningar': {
+      id: '/installningar'
+      path: '/installningar'
+      fullPath: '/installningar'
+      preLoaderRoute: typeof InstallningarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/statistik': {
       id: '/statistik'
       path: '/statistik'
@@ -124,6 +150,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnteckningarRoute: AnteckningarRoute,
   DataRoute: DataRoute,
   FokusRoute: FokusRoute,
+  InstallningarRoute: InstallningarRoute,
   StatistikRoute: StatistikRoute,
 }
 export const routeTree = rootRouteImport

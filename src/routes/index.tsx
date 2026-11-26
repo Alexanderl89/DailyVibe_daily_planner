@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type DragEvent } from "react";
 import { Shell } from "@/components/Shell";
 import { useApp, type Recurrence } from "@/lib/store";
-import { COLUMNS, columnFor, dueForColumn, type ColumnKey } from "@/lib/columns";
+import { columnFor, dueForRule, type Column } from "@/lib/columns";
 import { nextFreeColor } from "@/lib/colors";
 import { ColorSwatches } from "@/components/ColorSwatches";
+import { REC, TaskDialog } from "@/components/TaskDialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -13,12 +14,15 @@ export const Route = createFileRoute("/")({
   ] }),
   component: Board,
 });
-const REC: Record<Recurrence, string> = { none: "Ingen upprepning", daily: "Varje dag", weekly: "Varje vecka", monthly: "Varje månad" };
+// Shown only when some tasks match no column, so they never disappear from the board.
+const OTHER: Column = { id: "__other", name: "Övrigt", rule: { kind: "manual" } };
 
 function Board() {
-  const { projects, tasks, addTask, toggleTask, removeTask, moveTask, addProject, setProjectColor, removeProject, columns, addColumn, removeColumn, placeInColumn } = useApp();
+  const { projects, tasks, addTask, toggleTask, removeTask, moveTask, addProject, setProjectColor, removeProject, columns, addColumn, removeColumn, moveColumn, placeInColumn } = useApp();
   const usedColors = projects.map(p => p.color);
   const [newColor, setNewColor] = useState<string | null>(null); // null = pick the next free color
+  const [editing, setEditing] = useState<string | null>(null); // id of the task open in the edit dialog
+  const editingTask = tasks.find(t => t.id === editing);
   const [recoloring, setRecoloring] = useState<string | null>(null); // id of the project whose color picker is open
   const [newCol, setNewCol] = useState("");
   const [filter, setFilter] = useState<string>("all");
@@ -27,6 +31,7 @@ function Board() {
   const visible = tasks.filter(t => (filter === "all" || t.projectId === filter) && !t.done);
   const done = tasks.filter(t => (filter === "all" || t.projectId === filter) && t.done);
   const pOf = (id: string) => projects.find(p => p.id === id);
+  const placed = new Map(visible.flatMap(t => { const col = columnFor(t, columns); return col ? [[t.id, col] as const] : []; }));
   const field = "h-10 rounded-lg border bg-background px-3 text-sm";
 
   return (
@@ -63,25 +68,34 @@ function Board() {
       </form>
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        {[...COLUMNS.map(c => ({ ...c, custom: false })), ...columns.map(c => ({ key: c.id, title: c.name, custom: true }))].map(c => {
-          const items = visible.filter(t => c.custom ? t.columnId === c.key : !t.columnId && columnFor(t) === c.key).sort((a, b) => (a.due ?? "z").localeCompare(b.due ?? "z"));
+        {[...columns, ...(visible.some(t => !placed.has(t.id)) ? [OTHER] : [])].map((c, index) => {
+          const items = visible.filter(t => c === OTHER ? !placed.has(t.id) : placed.get(t.id) === c.id).sort((a, b) => (a.due ?? "z").localeCompare(b.due ?? "z"));
+          const overdue = c.rule.kind === "overdue";
+          // A drop is either a column being reordered or a task being moved into this column.
+          const onDrop = (e: DragEvent) => {
+            const col = e.dataTransfer.getData("col"); if (col) { if (c !== OTHER) moveColumn(col, index); return; }
+            const id = e.dataTransfer.getData("id"); if (!id || c === OTHER) return;
+            if (c.rule.kind === "manual") { placeInColumn(id, c.id); return; }
+            const due = dueForRule(c.rule); if (due !== undefined) moveTask(id, due);
+          };
           return (
-            <section key={c.key} onDragOver={e => e.preventDefault()}
-              onDrop={e => { const id = e.dataTransfer.getData("id"); if (!id) return; if (c.custom) placeInColumn(id, c.key); else if (c.key !== "overdue") moveTask(id, dueForColumn(c.key as ColumnKey)); }}
-              className={`rounded-2xl p-3 min-h-48 ${c.key === "overdue" ? "bg-destructive/10" : "bg-muted"}`}>
-              <h2 className={`font-display text-lg px-1 mb-3 flex justify-between ${c.key === "overdue" ? "text-destructive" : ""}`}>{c.title}<span className="text-muted-foreground text-sm font-sans flex gap-2">{items.length}{c.custom && <button onClick={() => confirm(`Ta bort kolumnen ${c.title}?`) && removeColumn(c.key)} aria-label="Ta bort kolumn">×</button>}</span></h2>
+            <section key={c.id} onDragOver={e => e.preventDefault()} onDrop={onDrop}
+              className={`rounded-2xl p-3 min-h-48 ${overdue ? "bg-destructive/10" : "bg-muted"}`}>
+              <h2 draggable={c !== OTHER} onDragStart={e => e.dataTransfer.setData("col", c.id)} title={c !== OTHER ? "Dra för att flytta kolumnen" : "Uppgifter som ingen kolumn fångar"}
+                className={`font-display text-lg px-1 mb-3 flex justify-between ${c !== OTHER ? "cursor-grab" : ""} ${overdue ? "text-destructive" : ""}`}>{c.name}<span className="text-muted-foreground text-sm font-sans flex gap-2">{items.length}{c !== OTHER && columns.length > 1 && <button onClick={() => confirm(`Ta bort kolumnen ${c.name}?`) && removeColumn(c.id)} aria-label="Ta bort kolumn">×</button>}</span></h2>
               <div className="space-y-2">
                 {items.map(t => (
-                  <div key={t.id} draggable onDragStart={e => e.dataTransfer.setData("id", t.id)} className="card-soft p-3 group cursor-grab">
+                  <div key={t.id} draggable onDragStart={e => e.dataTransfer.setData("id", t.id)} onClick={() => setEditing(t.id)} title="Klicka för att redigera" className="card-soft p-3 group cursor-grab">
                     <div className="flex gap-2 items-start">
-                      <button onClick={() => toggleTask(t.id)} className="mt-0.5 size-4 shrink-0 rounded-full border-2 border-primary hover:bg-primary/30" aria-label="Klar" />
+                      <button onClick={e => { e.stopPropagation(); toggleTask(t.id); }} className="mt-0.5 size-4 shrink-0 rounded-full border-2 border-primary hover:bg-primary/30" aria-label="Klar" />
                       <span className="text-sm flex-1">{t.title}</span>
-                      <button onClick={() => removeTask(t.id)} className="opacity-0 group-hover:opacity-50 text-sm">×</button>
+                      <button onClick={e => { e.stopPropagation(); removeTask(t.id); }} className="opacity-0 group-hover:opacity-50 text-sm">×</button>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground pl-6">
                       <span className="flex items-center gap-1"><i className="size-2 rounded-full" style={{ background: pOf(t.projectId)?.color }} />{pOf(t.projectId)?.name}</span>
                       {t.due && <span>{t.due.slice(5).replace("-", "/")}</span>}
                       {t.recurrence !== "none" && <span>↻ {REC[t.recurrence].toLowerCase()}</span>}
+                      {t.notes && <span title={t.notes}>✎ anteckning</span>}
                     </div>
                   </div>
                 ))}
@@ -100,6 +114,7 @@ function Board() {
           {showDone && <ul className="mt-2 space-y-1">{done.map(t => <li key={t.id} className="text-sm text-muted-foreground line-through cursor-pointer" onClick={() => toggleTask(t.id)}>{t.title}</li>)}</ul>}
         </div>
       )}
+      {editingTask && <TaskDialog key={editingTask.id} task={editingTask} onClose={() => setEditing(null)} />}
     </Shell>
   );
 }

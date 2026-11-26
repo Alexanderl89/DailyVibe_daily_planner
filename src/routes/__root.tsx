@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { useApp } from "../lib/store";
+import { startBackupSync } from "../lib/backup-sync";
 
 function NotFoundComponent() {
   return (
@@ -113,7 +114,12 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  useEffect(() => { useApp.persist.rehydrate(); }, []);
+  useEffect(() => {
+    // Load saved data first, then start backups so loading itself never counts as a change.
+    let stop: (() => void) | undefined; let cancelled = false;
+    void Promise.resolve(useApp.persist.rehydrate()).then(() => { if (!cancelled) stop = startBackupSync(); });
+    return () => { cancelled = true; stop?.(); };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

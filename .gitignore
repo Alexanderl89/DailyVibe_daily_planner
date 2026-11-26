@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -225,3 +225,6 @@ node_modules/
 .tanstack/
 .nitro/
 *.tsbuildinfo
+
+# Local backup files (personal data)
+backups/

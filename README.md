@@ -5,25 +5,56 @@ The interface is in Swedish.
 
 ## Features
 
-- **Planering (board):** tasks grouped by project and sorted into columns by due date
-  (overdue, today, tomorrow, this week, later). Supports recurring tasks (daily, weekly,
-  monthly), custom columns and drag and drop. Each project has a color, which you can pick
-  when creating it or change later by clicking the project's color dot.
-- **Fokus:** a timer for focused work blocks, linked to a task or project.
+- **Planering (board):** tasks grouped by project and sorted into columns. Supports recurring
+  tasks (daily, weekly, monthly) and drag and drop. Drag a column's title to reorder the columns.
+  Click a task to edit its title, project, date, repetition and notes, or to delete it.
+  Each project has a color, which you can pick when creating it or change later by clicking the
+  project's color dot.
+- **Fokus:** a timer for focused work blocks. Fokus has its own task list, separate from the
+  board: add tasks (optionally linked to a project), pick one, and start the timer. Tasks can be
+  renamed (their earlier blocks follow the new name), checked off or removed. The side panel shows
+  today's blocks, or this week's time per task.
 - **Statistik:** time spent per week, task and project.
 - **Anteckningar:** notes, optionally linked to a project.
-- **Data:** export all data to a JSON file, import it again, or reset.
+- **Data:** export all data to a JSON file, import it again, restore an automatic backup, or reset.
+- **Inställningar:** rename, reorder, add and remove columns, and choose each column's rule.
+
+### Column rules
+
+Each column has a rule that decides which tasks it collects: overdue, today, tomorrow, this week
+(through Sunday), day X–Y from today, no date, later (every dated task that's left), or manual
+(tasks you drag there). The default board ends with **Senare** (dated tasks that fit no earlier
+column) and **Backlog** (tasks without a date). Dragging a task to Senare sets its date to next
+Monday; dragging it to Backlog removes its date. Rules are evaluated against today's date, so a task due tomorrow moves to the "today"
+column by itself the next day. If several rules match, the task goes to the first matching column
+from the left. Tasks that match no column are shown in an extra "Övrigt" column.
 
 ## Run with Docker
 
+Build the image and start the container once:
+
 ```bash
-docker compose up --build
+docker build -t dailyvibe .
+docker run -d --name dailyvibe --restart unless-stopped \
+  -p 127.0.0.1:9005:9005 \
+  -v dailyvibe-backups:/app/backups \
+  dailyvibe
 ```
 
-Then open <http://localhost:9005>.
+Then open <http://localhost:9005>. The container starts again by itself after a reboot.
+The port is bound to `127.0.0.1`, so only this computer can reach the app.
 
-To stop it, run `docker compose down`. After changing the code, run `docker compose up --build`
-again to rebuild the image.
+To update after changing the code, rebuild the image and replace the container. The backups are
+kept, since they live in the `dailyvibe-backups` volume:
+
+```bash
+docker build -t dailyvibe .
+docker rm -f dailyvibe
+docker run -d --name dailyvibe --restart unless-stopped \
+  -p 127.0.0.1:9005:9005 \
+  -v dailyvibe-backups:/app/backups \
+  dailyvibe
+```
 
 ## Run locally
 
@@ -36,17 +67,27 @@ bun run test     # run the tests
 bun run build    # production build
 ```
 
+When run locally, backups are written to `./backups` (ignored by git).
+
 ## Where your data is stored
 
-All data is stored in your browser's `localStorage`, not on the server or in the Docker
-container. That means:
+Your data lives in the browser's `localStorage`. A few seconds after each change, the app also
+sends a backup to the server, which saves it in the `dailyvibe-backups` Docker volume:
 
-- Data is per browser and per device.
-- Clearing your browser's site data deletes it.
-- Rebuilding or removing the container does not affect it.
+- `latest.json`: the most recent backup.
+- `backup-YYYY-MM-DD.json`: one copy per day, kept for 30 days.
 
-To back up your data or move it to another browser, use **Export** on the Data page, then
-**Import** the file in the other browser.
+**Restoring:** open the Data page and pick a backup under "Automatisk backup". If the browser's
+data has been cleared, the app also offers to restore the newest backup when you open it. Until
+you choose, automatic backups are paused, so an empty browser never overwrites a good backup.
+
+To copy the backup files out of the container:
+
+```bash
+docker cp dailyvibe:/app/backups ./backups
+```
+
+You can still use **Export** and **Import** on the Data page to move data to another browser.
 
 ## Tech stack
 
